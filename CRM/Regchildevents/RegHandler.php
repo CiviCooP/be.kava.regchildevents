@@ -15,9 +15,17 @@ class CRM_Regchildevents_RegHandler {
 
 		// Check if this is a create / edit action
 		// Deleting appears not to be possible with a post hook -> object already deleted.
-		if(!in_array($operation, array('create', 'edit'))) {
+		if(!in_array($operation, array('create', 'edit', 'delete'))) {
 			return false;
 		}
+
+        // If operation is delete, fetch participant from session (see pre hook in regchildevents.php)
+        if($operation == 'delete') {
+            $participant = $this->getStoredParticipant();
+            if(!$participant) {
+                return false;
+            }
+        }
 
 		// Get event
 		$event = civicrm_api3('Event', 'getsingle', array(
@@ -25,7 +33,7 @@ class CRM_Regchildevents_RegHandler {
 		));
 
 		// Check what we need to process and show
-		if($this->checkIfActiveForEvent($event)) {
+		if(self::checkIfActiveForEvent($event)) {
 
 			// This is a parent event and the 'Register for child events' option is enabled.
 
@@ -40,19 +48,6 @@ class CRM_Regchildevents_RegHandler {
 				CRM_Core_Session::setStatus($msg, $title, 'success');
 			}
 
-		} elseif($this->isBackendPage() && $operation == 'create') {
-
-			// If adding a participant to a child event, and 'Register for child events' is enabled
-			// for the parent event, we'll display a warning
-
-			$parentEvent = $this->getParentEvent($event);
-			if($parentEvent && $this->checkIfActiveForEvent($parentEvent)) {
-
-				// Display warning
-				$msg = ts('You\'re adding a registration for a child event. Other events in this series will not be updated.', array('domain' => 'be.kava.regchildevents'));
-				$title = ts('Event Registration', array('domain' => 'be.kava.regchildevents'));
-				CRM_Core_Session::setStatus($msg, $title, 'info');
-			}
 		}
 
 		return true;
@@ -63,7 +58,7 @@ class CRM_Regchildevents_RegHandler {
 	 * @param string $operation Operation: create or edit
 	 * @param CRM_Event_BAO_Participant $participant Participant
 	 * @param array $childEventIds Child event IDs
-	 * @return int Number of event registrations created/updated
+	 * @return int Number of event updated
 	 */
 	public function processRegistrations($operation, $participant, $childEventIds) {
 
@@ -79,14 +74,45 @@ class CRM_Regchildevents_RegHandler {
 				case 'edit':
 					$this->updateChildRegistration($ceid, $participant);
 					break;
-				// case 'delete':
-				//	$this->deleteChildRegistration($re['entity_id'], $participant);
-				//	break;
+				case 'delete':
+				    $this->deleteChildRegistration($ceid, $participant);
+				    break;
 			}
 		}
 
 		return $count;
 	}
+
+    /**
+     * Stores participant in session for later use (for delete operations, see _pre hook)
+     * @param $id int Participant ID
+     * @return bool Success
+     */
+    public function storeParticipant($id) {
+
+        try {
+            $participant = civicrm_api3('Participant', 'getsingle', array(
+                'id' => $id,
+            ));
+            $session = CRM_Core_Session::singleton();
+            $session->set('regchildevents_participant', (object)$participant);
+            return true;
+        } catch(CiviCRM_API3_Exception $e) {
+            return false; // Participant not found, ignoring silently
+        }
+    }
+
+    /**
+     * Gets participant from session (stored there for delete operations)
+     * @return CRM_Event_BAO_Participant|null Participant
+     */
+    private function getStoredParticipant() {
+
+        $session = CRM_Core_Session::singleton();
+        $part = $session->get('regchildevents_participant');
+        $session->set('regchildevents_participant', null);
+        return $part;
+    }
 
 	/**
 	 * Check whether this extension should handle registrations for this event
@@ -94,7 +120,7 @@ class CRM_Regchildevents_RegHandler {
 	 * @return bool Extension is active
 	 * @throws CRM_Regchildevents_Exception If custom field is not defined
 	 */
-	private function checkIfActiveForEvent($event) {
+	public static function checkIfActiveForEvent($event) {
 
 		try {
 			$customField = civicrm_api3('CustomField', 'getsingle', array(
@@ -228,31 +254,31 @@ class CRM_Regchildevents_RegHandler {
 		return true;
 	}
 
-//	/**
-//	 * Deletes registration for a (child) event
-//	 * @param int $event_id Event ID
-//	 * @param CRM_Event_DAO_Participant $participant Participant
-//	 * @return bool Success
-//	 */
-//	private function deleteChildRegistration($event_id, $participant) {
-//
-//		$res = civicrm_api3('Participant', 'get', array(
-//			'contact_id' => $participant->contact_id,
-//			'event_id' => $event_id,
-//		));
-//		if($res['count'] == 0) {
-//			return true;
-//		}
-//
-//		foreach($res['values'] as $registration) {
-//
-//			civicrm_api3('Participant', 'delete', array(
-//				'id' => $registration['id'],
-//			));
-//		}
-//
-//		return true;
-//	}
+	/**
+	 * Deletes registration for a (child) event
+	 * @param int $event_id Event ID
+	 * @param CRM_Event_DAO_Participant $participant Participant
+	 * @return bool Success
+	 */
+	private function deleteChildRegistration($event_id, $participant) {
+
+		$res = civicrm_api3('Participant', 'get', array(
+			'contact_id' => $participant->contact_id,
+			'event_id' => $event_id,
+		));
+		if($res['count'] == 0) {
+			return true;
+		}
+
+		foreach($res['values'] as $registration) {
+
+			civicrm_api3('Participant', 'delete', array(
+				'id' => $registration['id'],
+			));
+		}
+
+		return true;
+	}
 
 	/**
 	 * Check if this is a backend page or an event registration page.

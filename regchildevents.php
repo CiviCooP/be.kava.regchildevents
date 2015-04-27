@@ -47,8 +47,26 @@ function regchildevents_civicrm_alterSettingsFolders(&$metaDataFolders = NULL) {
 }
 
 /**
+ * Implements hook_civicrm_pre().
+ * Stores data for a delete operation so we can remove child event participants in the next step.
+ * @param string $op Operation
+ * @param string $objectName Object Name
+ * @param int $id Object ID
+ * @param mixed $params Parameters
+ */
+function regchildevents_civicrm_pre($op, $objectName, $id, &$params) {
+
+    if($objectName == 'Participant' && $op == 'delete') {
+
+        $handler = new CRM_Regchildevents_RegHandler();
+        $handler->storeParticipant($id);
+    }
+}
+
+/**
  * Implements hook_civicrm_post().
- * Adds registrations for child events if the option for the event is set.
+ * 1. Adds registrations for child events for participants if the option for the event is set.
+ * 2. Modifies the child events slightly on creation of a recurring entity.
  * @param string $op Operation
  * @param string $objectName Object Name
  * @param int $objectId Object ID
@@ -59,6 +77,11 @@ function regchildevents_civicrm_post($op, $objectName, $objectId, &$objectRef) {
   if($objectName == 'Participant' && $objectRef) {
     $handler = new CRM_Regchildevents_RegHandler();
     $handler->handleRegistration($objectRef, $op);
+  }
+
+  if($objectName == 'RecurringEntity' && $objectRef) {
+    $handler = new CRM_Regchildevents_EventHandler();
+    $handler->updateEvents($objectRef, $op);
   }
 
 }
