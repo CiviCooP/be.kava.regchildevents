@@ -123,9 +123,7 @@ class CRM_Regchildevents_RegHandler {
 	public static function checkIfActiveForEvent($event) {
 
 		try {
-			$customField = civicrm_api3('CustomField', 'getsingle', array(
-				'name' => "register_for_child_events",
-			));
+			$customField = civicrm_api3('CustomField', 'getsingle', array('name' => "register_for_child_events"));
 			$customKey = 'custom_' . $customField['id'];
 		} catch(CiviCRM_API3_Exception $e) {
 			throw new CRM_Regchildevents_Exception('Custom field register_for_child_events is not defined.');

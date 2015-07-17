@@ -23,12 +23,14 @@ class CRM_Regchildevents_EventHandler {
             $new_event = civicrm_api3('Event', 'getsingle', array('id' => $entity->entity_id));
             $parent_event = civicrm_api3('Event', 'getsingle', array('id' => $entity->parent_id));
         } catch (CiviCRM_API3_Exception $e) {
-            // print_r($e->getMessage()); exit;
+            CRM_Core_Session::setStatus('An error occurred updating child events: ' . $e->getMessage(), 'Error', 'error');
             return false;
         }
 
         // Update child event options if our Recurring Events option is enabled
         if(CRM_Regchildevents_RegHandler::checkIfActiveForEvent($parent_event)) {
+
+            // CRM_Core_Session::setStatus('Updated child event: ' . $new_event['id'], 'Update', 'invfo');
 
             return civicrm_api3('Event', 'create', array(
                 'id' => $new_event['id'],
@@ -36,6 +38,10 @@ class CRM_Regchildevents_EventHandler {
                 'is_online_registration' => 0,
                 // 'title' => $new_event['title'] . ' (vervolg)',
             ));
+
+            // TODO: copy
+            // - reminders (civirm_action_schedule)
+            // - custom fields (zaal / accrediteringspunten)
         }
 
         return true;
