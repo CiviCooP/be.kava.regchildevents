@@ -48,7 +48,8 @@ function regchildevents_civicrm_alterSettingsFolders(&$metaDataFolders = NULL) {
 
 /**
  * Implements hook_civicrm_pre().
- * Stores data for a delete operation so we can remove child event participants in the next step.
+ * 1. Stores data for a delete operation so we can remove child event participants in the next step.
+ * 2. Stores IDs of recurring entities that are actually new so we can do some extra processing.
  * @param string $op Operation
  * @param string $objectName Object Name
  * @param int $id Object ID
@@ -57,7 +58,6 @@ function regchildevents_civicrm_alterSettingsFolders(&$metaDataFolders = NULL) {
 function regchildevents_civicrm_pre($op, $objectName, $id, &$params) {
 
     if($objectName == 'Participant' && $op == 'delete') {
-
         $handler = new CRM_Regchildevents_RegHandler();
         $handler->storeParticipant($id);
     }

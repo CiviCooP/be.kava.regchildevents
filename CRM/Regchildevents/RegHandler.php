@@ -22,7 +22,7 @@ class CRM_Regchildevents_RegHandler {
         // If operation is delete, fetch participant from session (see pre hook in regchildevents.php)
         if($operation == 'delete') {
             $participant = $this->getStoredParticipant();
-            if(!$participant) {
+            if(!$participant || !is_object($participant)) {
                 return false;
             }
         }
@@ -42,7 +42,7 @@ class CRM_Regchildevents_RegHandler {
 			$count = $this->processRegistrations($operation, $participant, $childEventIds);
 
 			// Show status message
-			if($this->isBackendPage()) {
+			if($this->isBackendPage() && $count > 0) {
 				$msg = ts('Updated registration for %1 child event(s).', array(1 => $count, 'domain' => 'be.kava.regchildevents'));
 				$title = ts('Event Registration', array('domain' => 'be.kava.regchildevents'));
 				CRM_Core_Session::setStatus($msg, $title, 'success');
@@ -58,27 +58,29 @@ class CRM_Regchildevents_RegHandler {
 	 * @param string $operation Operation: create or edit
 	 * @param CRM_Event_BAO_Participant $participant Participant
 	 * @param array $childEventIds Child event IDs
-	 * @return int Number of event updated
+	 * @return int Number of events updated
 	 */
 	public function processRegistrations($operation, $participant, $childEventIds) {
 
 		$count = 0;
-		foreach($childEventIds as $ceid) {
+	    if(count($childEventIds) > 0) {
+          foreach ($childEventIds as $ceid) {
 
-			$count ++;
+            $count++;
 
-			switch($operation) {
-				case 'create':
-					$this->addChildRegistration($ceid, $participant);
-					break;
-				case 'edit':
-					$this->updateChildRegistration($ceid, $participant);
-					break;
-				case 'delete':
-				    $this->deleteChildRegistration($ceid, $participant);
-				    break;
-			}
-		}
+            switch ($operation) {
+              case 'create':
+                $this->addChildRegistration($ceid, $participant);
+                break;
+              case 'edit':
+                $this->updateChildRegistration($ceid, $participant);
+                break;
+              case 'delete':
+                $this->deleteChildRegistration($ceid, $participant);
+                break;
+            }
+          }
+        }
 
 		return $count;
 	}
@@ -118,22 +120,31 @@ class CRM_Regchildevents_RegHandler {
 	 * Check whether this extension should handle registrations for this event
 	 * @param mixed $event Event
 	 * @return bool Extension is active
-	 * @throws CRM_Regchildevents_Exception If custom field is not defined
 	 */
 	public static function checkIfActiveForEvent($event) {
 
-		try {
-			$customField = civicrm_api3('CustomField', 'getsingle', array('name' => "register_for_child_events"));
-			$customKey = 'custom_' . $customField['id'];
-		} catch(CiviCRM_API3_Exception $e) {
-			throw new CRM_Regchildevents_Exception('Custom field register_for_child_events is not defined.');
-		}
+        $customKey = self::getActiveForEventFieldId();
 
 		if(!$event || !array_key_exists($customKey, $event) || $event[$customKey] != 1)
 			return false;
 
 		return true;
 	}
+
+    /**
+     * @return string Custom field key
+     * @throws CRM_Regchildevents_Exception If custom field is not defined
+     */
+    public static function getActiveForEventFieldId() {
+
+        try {
+            $customField = civicrm_api3('CustomField', 'getsingle', array('name' => "register_for_child_events"));
+            $customKey = 'custom_' . $customField['id'];
+            return $customKey;
+        } catch(CiviCRM_API3_Exception $e) {
+            throw new CRM_Regchildevents_Exception('Custom field register_for_child_events is not defined.');
+        }
+    }
 
 	/**
 	 * @param array $event Event
@@ -146,7 +157,7 @@ class CRM_Regchildevents_RegHandler {
 			'parent_id'    => $event['id'],
 		));
 		if(!$reResult || $reResult['count'] == 0) {
-			return false;
+			return array();
 		}
 
 		$ret = array();
